@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kismi Ledger Explorer</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; }
+        h1, h2 { color: #333; }
+        .section { background: white; padding: 20px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; table-layout: fixed; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        th { background-color: #f0f0f0; }
+        form { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        input[type="text"], input[type="date"] { padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+        button { background-color: #4CAF50; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background-color: #45a049; }
+        .stop-button { background-color: #f44336; }
+        .stop-button:hover { background-color: #d32f2f; }
+        .reset-button { background-color: #2196F3; }
+        .reset-button:hover { background-color: #1976D2; }
+        .status { color: {% if parsing %}green{% else %}red{% endif %}; }
+        .pagination { margin-top: 20px; }
+        .pagination a { padding: 8px 16px; text-decoration: none; color: #333; }
+        .pagination a.active { background-color: #4CAF50; color: white; }
+        .tx-table th:nth-child(1), .tx-table td:nth-child(1) { width: 40%; } /* Tx Hash */
+        .tx-table th:nth-child(2), .tx-table td:nth-child(2) { width: 15%; } /* Type */
+        .tx-table th:nth-child(3), .tx-table td:nth-child(3) { width: 15%; } /* Date */
+        .tx-table th:nth-child(4), .tx-table td:nth-child(4) { width: 10%; } /* Amount */
+        .tx-table th:nth-child(5), .tx-table td:nth-child(5) { width: 10%; } /* From */
+        .tx-table th:nth-child(6), .tx-table td:nth-child(6) { width: 10%; } /* To */
+        .balance-table th:nth-child(1), .balance-table td:nth-child(1) { width: 80%; } /* Address */
+        .balance-table th:nth-child(2), .balance-table td:nth-child(2) { width: 20%; } /* Balance */
+    </style>
+</head>
+<body>
+    <h1>Kismi Ledger Explorer</h1>
+
+    <div class="section">
+        <h2>Filters</h2>
+        <form method="POST">
+            <input type="text" name="tx_hash" placeholder="Transaction Hash" value="{{ request.form.get('tx_hash', '') }}">
+            <input type="text" name="from_addr" placeholder="From Address" value="{{ request.form.get('from_addr', '') }}">
+            <input type="text" name="to_addr" placeholder="To Address" value="{{ request.form.get('to_addr', '') }}">
+            <input type="date" name="date_start" value="{{ request.form.get('date_start', '') }}">
+            <button type="submit" name="filter">Apply Filters</button>
+            <button type="submit" formaction="{{ url_for('explorer') }}" class="reset-button">Reset Filters</button>
+        </form>
+        <form method="POST" action="/parse">
+            <button type="submit">Run Parser</button>
+        </form>
+        <form method="POST" action="/stop_parse">
+            <button type="submit" class="stop-button">Stop Parser</button>
+        </form>
+        <p class="status">Parser Status: {% if parsing %}Running{% else %}Stopped{% endif %}</p>
+    </div>
+
+    <div class="section">
+        <h2>Transaction Types</h2>
+        <p>Total Transactions: {{ total }}</p>
+        <p>Token Entries: {{ tx_type_stats.get('Token Entry', 0) }}</p>
+        <p>Votes: {{ tx_type_stats.get('Voted with Tokens', 0) }}</p>
+    </div>
+
+    <div class="section">
+        <h2>Blocks (Last 5)</h2>
+        <table>
+            <tr>
+                <th>Block ID</th><th>Start Time</th><th>End Time</th>
+            </tr>
+            {% for block in blocks %}
+            <tr>
+                <td>{{ block['block_id'] }}</td>
+                <td>{{ block['start_time'] }}</td>
+                <td>{{ block['end_time'] }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+
+    <div class="section">
+        <h2>Transactions per Day</h2>
+        <canvas id="txChart" width="400" height="200"></canvas>
+        <script>
+            var ctx = document.getElementById('txChart').getContext('2d');
+            var chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: {{ labels|tojson }},
+                    datasets: [{
+                        label: 'Transactions',
+                        data: {{ values|tojson }},
+                        borderColor: 'blue',
+                        fill: false
+                    }]
+                },
+                options: {
+                    scales: {
+                        x: { title: { display: true, text: 'Date' } },
+                        y: { title: { display: true, text: 'Count' } }
+                    }
+                }
+            });
+        </script>
+    </div>
+
+    <div class="section">
+        <h2>Total Amount per Day</h2>
+        <canvas id="amountChart" width="400" height="200"></canvas>
+        <script>
+            var ctx2 = document.getElementById('amountChart').getContext('2d');
+            var chart2 = new Chart(ctx2, {
+                type: 'line',
+                data: {
+                    labels: {{ amount_labels|tojson }},
+                    datasets: [{
+                        label: 'Total Amount',
+                        data: {{ amount_values|tojson }},
+                        borderColor: 'green',
+                        fill: false
+                    }]
+                },
+                options: {
+                    scales: {
+                        x: { title: { display: true, text: 'Date' } },
+                        y: { title: { display: true, text: 'Amount' } }
+                    }
+                }
+            });
+        </script>
+    </div>
+
+    <div class="section">
+        <h2>Last Transactions</h2>
+        <table class="tx-table">
+            <tr>
+                <th>Tx Hash</th><th>Type</th><th>Date</th><th>Amount</th><th>From</th><th>To</th>
+            </tr>
+            {% for tx in transactions %}
+            <tr>
+                <td>{{ tx['tx_hash'] }}</td>
+                <td>{{ tx['type'] }}</td>
+                <td>{{ tx['date_utc'] }}</td>
+                <td>{{ tx['amount'] }}</td>
+                <td>{{ tx['from_addr'][:16] }}...</td>
+                <td>{{ tx['to_addr'][:16] }}...</td>
+            </tr>
+            {% endfor %}
+        </table>
+        <div class="pagination">
+            {% if page > 1 %}
+            <a href="{{ url_for('explorer', page=page-1) }}">« Previous</a>
+            {% endif %}
+            {% set start = (page - 2) if (page - 2) > 0 else 1 %}
+            {% set end = (page + 2) if (page + 2) <= total_pages else total_pages %}
+            {% for p in range(start, end + 1) %}
+            <a href="{{ url_for('explorer', page=p) }}" class="{% if p == page %}active{% endif %}">{{ p }}</a>
+            {% endfor %}
+            {% if page < total_pages %}
+            <a href="{{ url_for('explorer', page=page+1) }}">Next »</a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>User Balances (KISS) (Top 15)</h2>
+        <table class="balance-table">
+            <tr>
+                <th>Address</th><th>Balance</th>
+            </tr>
+            {% for addr, balance in user_balances %}
+            <tr>
+                <td>{{ addr }}</td>
+                <td>{{ balance }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+
+    <div class="section">
+        <h2>Claim Balances (Top 15)</h2>
+        <table class="balance-table">
+            <tr>
+                <th>Claim Address</th><th>Total Votes</th>
+            </tr>
+            {% for claim in claim_balances %}
+            <tr>
+                <td>{{ claim['to_addr'] }}</td>
+                <td>{{ claim['total'] }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+</body>
+</html>
