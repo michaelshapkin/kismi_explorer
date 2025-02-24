@@ -98,7 +98,7 @@ def run_parser():
         save_progress(page)
         print(f"Обработана страница {page}")
         page += 1
-        time.sleep(0.5)
+        time.sleep(1)
     
     # Создаём блоки даже при остановке
     group_into_blocks()

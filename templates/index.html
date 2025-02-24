@@ -59,8 +59,10 @@
     <div class="section">
         <h2>Transaction Types</h2>
         <p>Total Transactions: {{ total }}</p>
+        <p>Prize in tokens:  {{ tx_type_stats.get('Prize in Tokens', 0) }}</p>
+        <p>Purchased tokens: {{ tx_type_stats.get('Purchased Tokens',0) }}</p> 
         <p>Token Entries: {{ tx_type_stats.get('Token Entry', 0) }}</p>
-        <p>Votes: {{ tx_type_stats.get('Voted with Tokens', 0) }}</p>
+        <p>Voted with tokens: {{ tx_type_stats.get('Voted with Tokens', 0) }}</p>
     </div>
 
     <div class="section">

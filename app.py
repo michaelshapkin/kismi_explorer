@@ -116,7 +116,7 @@ def explorer():
                           amount_labels=amount_labels, amount_values=amount_values, blocks=blocks, 
                           parsing=not STOP_EVENT.is_set(), page=page, total_pages=total_pages,
                           user_balances=sorted_user_balances, claim_balances=claim_balances,
-                          tx_type_stats=tx_type_stats)
+                          tx_type_stats=tx_type_stats, total=total)
 
 @app.route('/parse', methods=['POST'])
 def parse():
@@ -135,4 +135,4 @@ def stop_parse():
     return redirect(url_for('explorer'))
 
 if __name__ == '__main__':
-    app.run(host='127.0.0.1', port=5000)
+    app.run(host='0.0.0.0', port=5000)
